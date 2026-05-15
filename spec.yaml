@@ -1,0 +1,595 @@
+id: betriebskostenabrechnung_de
+
+name: Betriebskostenabrechnung Deutschland
+
+version: 1.0.0
+
+intent:
+  description: >
+    Declarative, continuously verifiable Betriebskostenabrechnungssystem
+    für Deutschland mit runtime reconciliation, revisionssicherer Historie
+    und rechtssicherer Umlagefähigkeit.
+
+domain:
+  country: DE
+
+actors:
+  - landlord
+  - property_manager
+  - tenant
+  - accountant
+  - auditor
+  - reconciliation_engine
+
+capabilities:
+
+  - id: accounting
+    description: Verarbeitung und Verteilung von Betriebskosten.
+
+  - id: document_generation
+    description: Erstellung rechtssicherer Dokumente.
+
+  - id: invoice_processing
+    description: Verarbeitung eingehender Rechnungen.
+
+  - id: metering
+    description: Verarbeitung von Verbrauchsdaten.
+
+  - id: reconciliation
+    description: Soll-Ist-Abgleich zwischen Spec und Runtime.
+
+  - id: access_control
+    description: Rollenbasierte Zugriffskontrolle.
+
+  - id: auditability
+    description: Vollständige historische Nachvollziehbarkeit.
+
+features:
+
+  - id: invoice_upload
+
+    description: >
+      Upload und Speicherung von Rechnungen.
+
+    requires:
+      capabilities:
+        - invoice_processing
+        - auditability
+
+    constrained_by:
+      - immutable_audit_log
+      - secure_file_handling
+      - accepted_invoice_formats
+
+    governed_by:
+      - upload_validation_policy
+      - audit_log_policy
+
+    complies_with:
+      - DSGVO
+      - GoBD
+
+    verified_by:
+      - invoice_upload_validation
+      - invoice_audit_entry_validation
+
+  - id: operating_cost_distribution
+
+    description: >
+      Umlage von Betriebskosten auf Mieter.
+
+    requires:
+      capabilities:
+        - accounting
+        - auditability
+
+    constrained_by:
+      - legal_cost_categories_only
+      - deterministic_calculations
+      - tenant_time_based_allocation
+      - reproducible_statements
+
+    governed_by:
+      - allocation_policy
+      - statement_versioning_policy
+
+    complies_with:
+      - BetrKV
+      - BGB
+
+    verified_by:
+      - allocation_sum_validation
+      - allocation_period_validation
+      - tenant_balance_validation
+
+  - id: heating_cost_distribution
+
+    description: >
+      Verbrauchsabhängige Heizkostenabrechnung.
+
+    requires:
+      capabilities:
+        - accounting
+        - metering
+
+    constrained_by:
+      - heating_consumption_required
+      - heating_ratio_compliance
+      - deterministic_calculations
+
+    governed_by:
+      - heating_distribution_policy
+
+    complies_with:
+      - Heizkostenverordnung
+
+    verified_by:
+      - heating_ratio_validation
+      - meter_reading_validation
+
+  - id: statement_generation
+
+    description: >
+      Automatische Erstellung von Betriebskostenabrechnungen.
+
+    requires:
+      capabilities:
+        - accounting
+        - document_generation
+        - auditability
+
+    constrained_by:
+      - immutable_documents
+      - explainable_calculation
+      - reproducible_statements
+      - utf8_document_support
+
+    governed_by:
+      - pdf_finalization_policy
+      - document_hash_policy
+      - statement_versioning_policy
+
+    complies_with:
+      - GoBD
+      - DSGVO
+
+    verified_by:
+      - statement_hash_validation
+      - statement_balance_validation
+      - statement_pdf_generation_validation
+
+  - id: tenant_portal
+
+    description: >
+      Self-Service Zugriff für Mieter.
+
+    requires:
+      capabilities:
+        - access_control
+        - document_generation
+
+    constrained_by:
+      - tenant_data_isolation
+      - session_expiration_required
+
+    governed_by:
+      - tenant_access_policy
+      - authentication_policy
+
+    complies_with:
+      - DSGVO
+
+    verified_by:
+      - cross_tenant_access_validation
+      - session_timeout_validation
+
+constraints:
+
+  - id: immutable_documents
+
+    description: >
+      Finalisierte Dokumente dürfen nicht verändert werden.
+
+    enforced_by:
+      - document_hash_policy
+      - pdf_finalization_policy
+
+    validated_by:
+      - statement_hash_validation
+
+    severity: critical
+
+  - id: deterministic_calculations
+
+    description: >
+      Alle Berechnungen müssen deterministisch reproduzierbar sein.
+
+    enforced_by:
+      - allocation_policy
+
+    validated_by:
+      - allocation_sum_validation
+
+    severity: critical
+
+  - id: legal_cost_categories_only
+
+    description: >
+      Nur gesetzlich umlagefähige Kostenarten dürfen verwendet werden.
+
+    enforced_by:
+      - allocation_policy
+
+    validated_by:
+      - legal_category_validation
+
+    severity: high
+
+  - id: tenant_data_isolation
+
+    description: >
+      Mieter dürfen ausschließlich eigene Daten sehen.
+
+    enforced_by:
+      - tenant_access_policy
+
+    validated_by:
+      - cross_tenant_access_validation
+
+    severity: critical
+
+  - id: reproducible_statements
+
+    description: >
+      Historische Abrechnungen müssen exakt reproduzierbar bleiben.
+
+    enforced_by:
+      - statement_versioning_policy
+      - immutable_storage_policy
+
+    validated_by:
+      - historical_statement_rebuild_validation
+
+    severity: critical
+
+  - id: immutable_audit_log
+
+    description: >
+      Audit-Logs dürfen nicht manipulierbar sein.
+
+    enforced_by:
+      - audit_log_policy
+
+    validated_by:
+      - audit_integrity_validation
+
+    severity: critical
+
+  - id: heating_ratio_compliance
+
+    description: >
+      Heizkosten müssen gemäß Heizkostenverordnung verteilt werden.
+
+    enforced_by:
+      - heating_distribution_policy
+
+    validated_by:
+      - heating_ratio_validation
+
+    severity: high
+
+policies:
+
+  - id: allocation_policy
+
+    applies_to:
+      features:
+        - operating_cost_distribution
+
+    enforces:
+      - deterministic_calculations
+      - legal_cost_categories_only
+
+    rules:
+      - invoice_totals_must_match_allocations
+      - no_negative_allocations
+      - allocation_period_must_match_statement_period
+
+  - id: heating_distribution_policy
+
+    applies_to:
+      features:
+        - heating_cost_distribution
+
+    enforces:
+      - heating_ratio_compliance
+
+    rules:
+      - minimum_consumption_based_ratio_50_percent
+      - maximum_fixed_ratio_50_percent
+
+  - id: tenant_access_policy
+
+    applies_to:
+      features:
+        - tenant_portal
+
+    enforces:
+      - tenant_data_isolation
+
+    rules:
+      - tenant_can_only_access_own_documents
+      - tenant_can_only_access_active_contracts
+
+  - id: document_hash_policy
+
+    applies_to:
+      features:
+        - statement_generation
+
+    enforces:
+      - immutable_documents
+
+    rules:
+      - finalized_documents_receive_sha256_hash
+      - hash_changes_trigger_alert
+
+  - id: statement_versioning_policy
+
+    applies_to:
+      features:
+        - statement_generation
+
+    enforces:
+      - reproducible_statements
+
+    rules:
+      - every_change_creates_new_version
+      - previous_versions_remain_accessible
+
+  - id: audit_log_policy
+
+    applies_to:
+      features:
+        - invoice_upload
+        - statement_generation
+        - operating_cost_distribution
+
+    enforces:
+      - immutable_audit_log
+
+    rules:
+      - every_mutation_creates_audit_entry
+      - audit_entries_are_append_only
+
+checks:
+
+  - id: allocation_sum_validation
+
+    validates:
+      - deterministic_calculations
+
+    targets:
+      features:
+        - operating_cost_distribution
+
+    type: calculation
+
+    expect:
+      invoice_totals_equal_allocated_totals: true
+
+  - id: tenant_balance_validation
+
+    validates:
+      - deterministic_calculations
+
+    targets:
+      features:
+        - operating_cost_distribution
+
+    type: calculation
+
+    expect:
+      tenant_balance_correct: true
+
+  - id: legal_category_validation
+
+    validates:
+      - legal_cost_categories_only
+
+    targets:
+      features:
+        - operating_cost_distribution
+
+    type: compliance
+
+    expect:
+      only_betrkv_categories_used: true
+
+  - id: statement_hash_validation
+
+    validates:
+      - immutable_documents
+
+    targets:
+      features:
+        - statement_generation
+
+    type: integrity
+
+    expect:
+      document_hash_unchanged: true
+
+  - id: statement_pdf_generation_validation
+
+    validates:
+      - utf8_document_support
+
+    targets:
+      features:
+        - statement_generation
+
+    type: document
+
+    expect:
+      pdf_generation_successful: true
+
+  - id: historical_statement_rebuild_validation
+
+    validates:
+      - reproducible_statements
+
+    targets:
+      features:
+        - statement_generation
+
+    type: replay
+
+    expect:
+      rebuilt_statement_matches_original: true
+
+  - id: cross_tenant_access_validation
+
+    validates:
+      - tenant_data_isolation
+
+    targets:
+      features:
+        - tenant_portal
+
+    type: authorization
+
+    expect:
+      foreign_document_access_denied: true
+
+  - id: heating_ratio_validation
+
+    validates:
+      - heating_ratio_compliance
+
+    targets:
+      features:
+        - heating_cost_distribution
+
+    type: compliance
+
+    expect:
+      legal_heating_distribution_ratio_applied: true
+
+  - id: audit_integrity_validation
+
+    validates:
+      - immutable_audit_log
+
+    targets:
+      features:
+        - invoice_upload
+        - statement_generation
+
+    type: integrity
+
+    expect:
+      audit_log_append_only: true
+
+reconciliation:
+
+  enabled: true
+
+  mode: continuous
+
+  graph:
+
+    - feature: operating_cost_distribution
+      expected:
+        constraints:
+          - deterministic_calculations
+          - legal_cost_categories_only
+      actual:
+        checks:
+          - allocation_sum_validation
+          - legal_category_validation
+
+    - feature: statement_generation
+      expected:
+        constraints:
+          - immutable_documents
+          - reproducible_statements
+      actual:
+        checks:
+          - statement_hash_validation
+          - historical_statement_rebuild_validation
+
+    - feature: tenant_portal
+      expected:
+        constraints:
+          - tenant_data_isolation
+      actual:
+        checks:
+          - cross_tenant_access_validation
+
+  detect:
+    - unauthorized_mutations
+    - incorrect_allocations
+    - broken_document_integrity
+    - missing_audit_entries
+    - policy_violations
+    - legal_non_compliance
+
+  actions:
+
+    on_critical_mismatch:
+      - block_statement_finalization
+      - create_security_alert
+      - notify_admin
+      - persist_forensic_snapshot
+
+    on_high_severity_mismatch:
+      - create_reconciliation_event
+      - require_manual_review
+
+observability:
+
+  metrics:
+
+    - statement_generation_duration
+    - reconciliation_failures
+    - allocation_mismatches
+    - failed_integrity_checks
+    - unauthorized_access_attempts
+
+  tracing:
+    enabled: true
+
+  logging:
+    immutable: true
+    structured: true
+
+runtime:
+
+  execution_model: plan_act_verify_reconcile
+
+  engines:
+
+    plan:
+      responsibility:
+        - spec_interpretation
+        - dependency_resolution
+        - execution_planning
+
+    act:
+      responsibility:
+        - invoice_processing
+        - allocation_execution
+        - statement_generation
+
+    verify:
+      responsibility:
+        - constraint_validation
+        - policy_validation
+        - runtime_checks
+
+    reconcile:
+      responsibility:
+        - desired_vs_actual_comparison
+        - drift_detection
+        - alerting
